@@ -16,6 +16,9 @@ reportes/
 *.log
 uvicorn.log
 
+# Environment variables
+.env
+
 # IDEs
 .vscode/
 .idea/

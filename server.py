@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from jinja2 import Environment, FileSystemLoader
+from agent_core import run_agent
 
 app = FastAPI()
 
@@ -41,6 +42,21 @@ async def crear_reporte(data: ReporteData):
         f.write(reporte_generado)
     
     return {"status": "ok", "reporte": reporte_generado, "file": nombre_archivo}
+
+class PreguntaData(BaseModel):
+    question: str
+    extra: dict = {}
+
+@app.post("/ask")
+async def consultar_agente(data: PreguntaData):
+    """Endpoint para consultar al agente IA"""
+    result = run_agent(data.question, data.extra)
+    return result
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "ok"}
 
 # Montar carpeta reportes como archivos estáticos
 app.mount("/reportes", StaticFiles(directory="reportes"), name="reportes")
