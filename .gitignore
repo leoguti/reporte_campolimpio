@@ -19,6 +19,10 @@ uvicorn.log
 # Environment variables
 .env
 
+# Database
+conversations.db
+*.db
+
 # IDEs
 .vscode/
 .idea/

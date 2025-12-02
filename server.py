@@ -1,10 +1,13 @@
 import os
 from datetime import datetime
+from typing import Optional
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from jinja2 import Environment, FileSystemLoader
 from agent_core import run_agent
+from agent_with_context import run_agent_with_context
+from conversation_db import get_or_create_conversation, update_conversation
 
 app = FastAPI()
 
@@ -47,9 +50,68 @@ class PreguntaData(BaseModel):
     question: str
     extra: dict = {}
 
+class PreguntaConContextoData(BaseModel):
+    question: str
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    extra: dict = {}
+
 @app.post("/ask")
-async def consultar_agente(data: PreguntaData):
-    """Endpoint para consultar al agente IA"""
+async def consultar_agente(data: PreguntaConContextoData):
+    """
+    Endpoint para consultar al agente IA con contexto de conversación.
+    
+    Recibe:
+        - question: Pregunta del usuario
+        - user_id: ID del usuario (ej. whatsapp:+573012345678 desde TextIt)
+        - conversation_id: ID de la conversación (ej. ID del flujo en TextIt)
+        - extra: Parámetros adicionales opcionales
+    
+    Devuelve:
+        - message: Respuesta del agente para el usuario
+        - state: Estado actualizado de la conversación (status, step, issues, etc.)
+        - conversation_id: ID de la conversación (para referencia)
+    """
+    # Generar user_id por defecto si no viene
+    user_id = data.user_id or "default_user"
+    
+    # 1. Cargar o crear el estado de conversación desde la BD
+    state = get_or_create_conversation(user_id, data.conversation_id)
+    
+    # 2. Actualizar el mensaje del usuario en el estado
+    state.add_message("user", data.question)
+    
+    # 3. Ejecutar el agente con contexto
+    mensaje_para_usuario, state_actualizado = run_agent_with_context(
+        data.question,
+        state,
+        data.extra
+    )
+    
+    # 4. Guardar el estado actualizado en la BD
+    update_conversation(state_actualizado)
+    
+    # 5. Preparar respuesta para el cliente
+    state_dict = state_actualizado.to_dict()
+    
+    return {
+        "message": mensaje_para_usuario,
+        "conversation_id": state_actualizado.meta["conversation_id"],
+        "state": {
+            "status": state_actualizado.conversation["status"],
+            "step": state_actualizado.conversation["step"],
+            "pending_question": state_actualizado.conversation["pending_question"],
+            "query_type": state_actualizado.query["type"],
+            "query_table": state_actualizado.query["table"],
+            "filters": state_actualizado.query["filters"],
+            "issues": state_actualizado.issues,
+            "ready_to_execute": state_actualizado.execution["ready"]
+        }
+    }
+
+@app.post("/ask_legacy")
+async def consultar_agente_legacy(data: PreguntaData):
+    """Endpoint legacy sin contexto (retrocompatibilidad)"""
     result = run_agent(data.question, data.extra)
     return result
 
