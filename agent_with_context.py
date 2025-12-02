@@ -189,13 +189,14 @@ Tabla Kardex: idkardex, fechakardex, TipoMovimiento, coordinador, MunicipioOrige
         user_message += business_context + "\n\n"
     
     user_message += """
-RESPONDE CON:
-1. Un mensaje_para_usuario claro y corto
-2. El state_json actualizado según tu análisis
+INSTRUCCIONES DE RESPUESTA:
+Responde ÚNICAMENTE con el mensaje que quieres enviar al usuario.
+- Tu respuesta debe ser clara, concisa y natural
+- NO incluyas etiquetas como "MENSAJE:" o "STATE_JSON:"
+- NO incluyas JSON, bloques de código ni información técnica
+- Solo el texto conversacional para el usuario
 
-Formato de respuesta:
-MENSAJE: [tu mensaje para el usuario]
-STATE_JSON: [el state_json completo actualizado en formato JSON]
+El sistema se encargará automáticamente de actualizar el state_json.
 """
     
     # Llamar a OpenAI con system message y user message
@@ -211,16 +212,24 @@ STATE_JSON: [el state_json completo actualizado en formato JSON]
         
         respuesta_completa = response.output_text
         
-        # Parsear respuesta para extraer mensaje y state actualizado
-        # TODO: Implementar parsing estructurado de MENSAJE y STATE_JSON
-        # Por ahora, usar la respuesta completa como mensaje
-        mensaje_para_usuario = respuesta_completa
+        # Extraer solo el mensaje para el usuario (limpiar cualquier formato residual)
+        mensaje_para_usuario = respuesta_completa.strip()
         
-        # Actualizar estado de conversación
+        # Limpiar posibles etiquetas de formato si las hay
+        if "MENSAJE:" in mensaje_para_usuario:
+            # Extraer solo la parte después de MENSAJE:
+            partes = mensaje_para_usuario.split("MENSAJE:", 1)
+            if len(partes) > 1:
+                mensaje_para_usuario = partes[1].strip()
+                # Eliminar STATE_JSON: y todo lo que sigue
+                if "STATE_JSON:" in mensaje_para_usuario:
+                    mensaje_para_usuario = mensaje_para_usuario.split("STATE_JSON:")[0].strip()
+        
+        # Actualizar estado de conversación con el mensaje limpio
         state.add_message("agent", mensaje_para_usuario)
         
+        # TODO: El agente debería retornar también el state actualizado
         # Por ahora marcamos como executed
-        # TODO: Parsear el STATE_JSON de la respuesta y actualizar el state real
         state.mark_executed(result_summary=f"Procesó consulta de tipo {state.query.get('type', 'general')}")
         
         return mensaje_para_usuario, state
