@@ -1,10 +1,11 @@
 import os
 import json
 import requests
+from typing import Optional
 from openai import OpenAI
 
 
-def run_agent(question: str, extra: dict | None = None):
+def run_agent(question: str, extra: Optional[dict] = None):
     """
     Ejecuta el agente de Campolimpio con acceso a tablas Certificados y Kardex.
     
