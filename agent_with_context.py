@@ -228,9 +228,17 @@ El sistema se encargará automáticamente de actualizar el state_json.
         # Actualizar estado de conversación con el mensaje limpio
         state.add_message("agent", mensaje_para_usuario)
         
-        # TODO: El agente debería retornar también el state actualizado
-        # Por ahora marcamos como executed
-        state.mark_executed(result_summary=f"Procesó consulta de tipo {state.query.get('type', 'general')}")
+        # TODO: Aquí debería parsearse STATE_JSON de la respuesta de OpenAI
+        # para actualizar state.query dinámicamente.
+        # Por ahora, verificamos manualmente si la query parece estar lista
+        
+        # Si la query tiene tabla y algún filtro o está explícitamente lista,
+        # marcarla como ready para que el endpoint la ejecute
+        if (state.query.get("table") and 
+            (state.query.get("filters") or state.query.get("validated"))):
+            # Marcar como lista para ejecutar
+            state.execution["ready"] = True
+            state.update_status(ConversationStatus.READY_TO_EXECUTE)
         
         return mensaje_para_usuario, state
         

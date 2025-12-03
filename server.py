@@ -91,31 +91,39 @@ async def consultar_agente(data: PreguntaConContextoData):
         data.extra
     )
     
-    # 4. Si el estado indica que la query está lista, ejecutarla
-    query_summary = None
-    query_records = None
-    query_error = None
+    # 4. Guardar el estado actualizado en la BD (después de OpenAI)
+    update_conversation(state_actualizado)
     
-    if state_actualizado.conversation["status"] == ConversationStatus.READY_TO_EXECUTE.value:
+    # 5. Decidir si ejecutar la consulta a Airtable automáticamente
+    # Condiciones: ready=True y last_run_at=None (no ejecutada aún)
+    if state_actualizado.execution["ready"] and state_actualizado.execution["last_run_at"] is None:
         # Ejecutar la consulta a Airtable
         query_summary, query_records, query_error = execute_query_from_state(state_actualizado)
         
-        # Actualizar el estado con los resultados
+        # Actualizar el estado con los resultados de la ejecución
+        state_actualizado.execution["last_run_at"] = datetime.utcnow().isoformat()
+        
         if query_error:
+            # Hubo un error al ejecutar
             state_actualizado.execution["error"] = query_error
             state_actualizado.execution["result_summary"] = query_summary
+            # Mensaje al usuario informando del error
+            mensaje_para_usuario = query_summary
         else:
+            # Ejecución exitosa
             state_actualizado.execution["result_summary"] = query_summary
-            state_actualizado.execution["last_run_at"] = datetime.utcnow().isoformat()
+            state_actualizado.execution["error"] = None
             state_actualizado.update_status(ConversationStatus.EXECUTED)
             
-            # Agregar el resumen de resultados al mensaje del agente
-            # (el agente ya dio su mensaje, ahora agregamos los resultados)
-            if query_records is not None:
-                mensaje_para_usuario = f"{mensaje_para_usuario}\n\n{query_summary}"
-    
-    # 5. Guardar el estado actualizado en la BD
-    update_conversation(state_actualizado)
+            # Construir mensaje para el usuario con el resumen de resultados
+            mensaje_para_usuario = query_summary
+            
+            # Agregar sugerencia para ajustar filtros
+            if query_records is not None and len(query_records) > 0:
+                mensaje_para_usuario += "\n\nSi quieres cambiar algún filtro o ver algo más específico, dime qué deseas ajustar."
+        
+        # Guardar estado actualizado con la información de ejecución
+        update_conversation(state_actualizado)
     
     # 6. Preparar respuesta para el cliente
     response = {
@@ -137,14 +145,6 @@ async def consultar_agente(data: PreguntaConContextoData):
             }
         }
     }
-    
-    # Agregar resultados de la query si se ejecutó
-    if query_records is not None:
-        response["query_results"] = {
-            "summary": query_summary,
-            "count": len(query_records),
-            "records": query_records[:10]  # Limitar a 10 registros en la respuesta
-        }
     
     return response
 
