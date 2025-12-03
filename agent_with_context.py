@@ -250,7 +250,10 @@ El sistema se encargará automáticamente de actualizar el state_json.
             "procedo con la consulta",
             "ejecuto la consulta ahora",
             "armando la consulta",
-            "consultando airtable"
+            "consultando airtable",
+            "consulta marcada como lista",
+            "marcada como lista para ejecutar",
+            "dejo la consulta lista"
         ]
         
         # Verificar que el agente realmente esté ejecutando, no solo preguntando
