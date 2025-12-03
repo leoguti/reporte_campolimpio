@@ -264,11 +264,23 @@ El sistema se encargará automáticamente de actualizar el state_json.
             "necesito que", 
             "por favor indícame",
             "¿qué", "¿cuál", "¿para qué",
-            "falta", "necesito saber"
+            "falta", "necesito saber",
+            "elige", "quieres que"
         ])
         
-        if (any(keyword in msg_lower for keyword in execution_keywords) 
-            and not is_asking_questions):
+        # Detectar cuando muestra resumen de consulta SIN preguntar más
+        shows_query_summary = (
+            "- tabla:" in msg_lower and 
+            "- filtros:" in msg_lower
+        )
+        
+        should_mark_ready = (
+            (any(keyword in msg_lower for keyword in execution_keywords) 
+             and not is_asking_questions) or
+            (shows_query_summary and not is_asking_questions)
+        )
+        
+        if should_mark_ready:
             # El agente indica que está ejecutando
             # Extraer filtros básicos de la conversación
             
