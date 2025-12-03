@@ -33,17 +33,18 @@ def test_auto_execution():
     
     print(f"\n--- Análisis de la respuesta ---")
     print(f"Message: {data.get('message', '')[:200]}...")
+    print(f"Done: {data.get('done', False)}")
     print(f"Status: {data['state']['status']}")
     print(f"Ready to execute: {data['state']['ready_to_execute']}")
     print(f"Last run at: {data['state']['execution']['last_run_at']}")
     print(f"Result summary: {data['state']['execution'].get('result_summary', 'N/A')[:100] if data['state']['execution'].get('result_summary') else 'N/A'}...")
     
     # Verificar si se ejecutó
-    if data['state']['execution']['last_run_at'] is not None:
-        print("\n✅ ÉXITO: La consulta se ejecutó automáticamente")
+    if data.get('done'):
+        print("\n✅ ÉXITO: done=True - La consulta se ejecutó automáticamente")
         print(f"✅ El mensaje contiene el resumen de resultados")
     else:
-        print("\n⚠️ La consulta NO se ejecutó")
+        print("\n⚠️ done=False - La consulta NO se ejecutó")
         print("Puede ser que el agente esté pidiendo más información")
     
     print("\n" + "="*70)
@@ -68,15 +69,16 @@ def test_clarification_flow():
     
     print(f"\nUsuario: {payload['question']}")
     print(f"\nMessage: {data.get('message', '')[:300]}...")
+    print(f"Done: {data.get('done', False)}")
     print(f"Status: {data['state']['status']}")
     print(f"Ready to execute: {data['state']['ready_to_execute']}")
     print(f"Last run at: {data['state']['execution']['last_run_at']}")
     
-    if data['state']['execution']['last_run_at'] is None:
-        print("\n✅ CORRECTO: No se ejecutó porque faltan datos")
+    if not data.get('done'):
+        print("\n✅ CORRECTO: done=False - No se ejecutó porque faltan datos")
         print("✅ El agente está pidiendo clarificaciones")
     else:
-        print("\n⚠️ INESPERADO: Se ejecutó aunque falta información")
+        print("\n⚠️ INESPERADO: done=True - Se ejecutó aunque falta información")
     
     print("\n" + "="*70)
 

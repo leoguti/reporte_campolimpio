@@ -126,8 +126,14 @@ async def consultar_agente(data: PreguntaConContextoData):
         update_conversation(state_actualizado)
     
     # 6. Preparar respuesta para el cliente
+    # Indicador 'done': True cuando la consulta ya se ejecutó (ready=True y last_run_at no es None)
+    # Útil para clientes como TextIt para decidir si continuar preguntando o cerrar el flujo
+    done = (state_actualizado.execution["ready"] and 
+            state_actualizado.execution.get("last_run_at") is not None)
+    
     response = {
         "message": mensaje_para_usuario,
+        "done": done,
         "conversation_id": state_actualizado.meta["conversation_id"],
         "state": {
             "status": state_actualizado.conversation["status"],
