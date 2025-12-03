@@ -242,20 +242,28 @@ El sistema se encargará automáticamente de actualizar el state_json.
             elif "kardex" in msg_lower or "movimientos" in msg_lower:
                 state.query["table"] = "Kardex"
         
-        # Detectar si el agente dice que va a ejecutar o que la consulta está lista
-        ready_keywords = [
+        # Detectar si el agente dice que va a ejecutar la consulta
+        # Debe ser una frase muy específica que indique ejecución inminente
+        execution_keywords = [
             "voy a armar la consulta",
-            "voy a ejecutar",
+            "voy a ejecutar la consulta",
             "procedo con la consulta",
-            "ejecuto la consulta",
-            "consulta lista",
-            "ya tengo todo",
-            "listo para",
-            "voy a buscar"
+            "ejecuto la consulta ahora",
+            "armando la consulta",
+            "consultando airtable"
         ]
         
-        if any(keyword in msg_lower for keyword in ready_keywords):
-            # El agente indica que está listo para ejecutar
+        # Verificar que el agente realmente esté ejecutando, no solo preguntando
+        is_asking_questions = any(phrase in msg_lower for phrase in [
+            "necesito que", 
+            "por favor indícame",
+            "¿qué", "¿cuál", "¿para qué",
+            "falta", "necesito saber"
+        ])
+        
+        if (any(keyword in msg_lower for keyword in execution_keywords) 
+            and not is_asking_questions):
+            # El agente indica que está ejecutando
             # Extraer filtros básicos de la conversación
             
             # Buscar coordinador en el historial
