@@ -411,9 +411,6 @@ def run_all_tests():
 
 
 if __name__ == "__main__":
-    # Cargar variables de entorno si es necesario
-    if os.path.exists('.env'):
-        from dotenv import load_dotenv
-        load_dotenv()
-    
+    # Las variables de entorno deben estar cargadas externamente
+    # (en producción, por deploy.sh; localmente, exportar manualmente)
     run_all_tests()
