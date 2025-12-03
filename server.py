@@ -8,6 +8,8 @@ from jinja2 import Environment, FileSystemLoader
 from agent_core import run_agent
 from agent_with_context import run_agent_with_context
 from conversation_db import get_or_create_conversation, update_conversation
+from conversation_state import ConversationStatus
+from queries import execute_query_from_state
 
 app = FastAPI()
 
@@ -71,6 +73,7 @@ async def consultar_agente(data: PreguntaConContextoData):
         - message: Respuesta del agente para el usuario
         - state: Estado actualizado de la conversación (status, step, issues, etc.)
         - conversation_id: ID de la conversación (para referencia)
+        - query_results: Resultados de la consulta (si se ejecutó)
     """
     # Generar user_id por defecto si no viene
     user_id = data.user_id or "default_user"
@@ -88,13 +91,34 @@ async def consultar_agente(data: PreguntaConContextoData):
         data.extra
     )
     
-    # 4. Guardar el estado actualizado en la BD
+    # 4. Si el estado indica que la query está lista, ejecutarla
+    query_summary = None
+    query_records = None
+    query_error = None
+    
+    if state_actualizado.conversation["status"] == ConversationStatus.READY_TO_EXECUTE.value:
+        # Ejecutar la consulta a Airtable
+        query_summary, query_records, query_error = execute_query_from_state(state_actualizado)
+        
+        # Actualizar el estado con los resultados
+        if query_error:
+            state_actualizado.execution["error"] = query_error
+            state_actualizado.execution["result_summary"] = query_summary
+        else:
+            state_actualizado.execution["result_summary"] = query_summary
+            state_actualizado.execution["last_run_at"] = datetime.utcnow().isoformat()
+            state_actualizado.update_status(ConversationStatus.EXECUTED)
+            
+            # Agregar el resumen de resultados al mensaje del agente
+            # (el agente ya dio su mensaje, ahora agregamos los resultados)
+            if query_records is not None:
+                mensaje_para_usuario = f"{mensaje_para_usuario}\n\n{query_summary}"
+    
+    # 5. Guardar el estado actualizado en la BD
     update_conversation(state_actualizado)
     
-    # 5. Preparar respuesta para el cliente
-    state_dict = state_actualizado.to_dict()
-    
-    return {
+    # 6. Preparar respuesta para el cliente
+    response = {
         "message": mensaje_para_usuario,
         "conversation_id": state_actualizado.meta["conversation_id"],
         "state": {
@@ -105,9 +129,24 @@ async def consultar_agente(data: PreguntaConContextoData):
             "query_table": state_actualizado.query["table"],
             "filters": state_actualizado.query["filters"],
             "issues": state_actualizado.issues,
-            "ready_to_execute": state_actualizado.execution["ready"]
+            "ready_to_execute": state_actualizado.execution["ready"],
+            "execution": {
+                "last_run_at": state_actualizado.execution.get("last_run_at"),
+                "result_summary": state_actualizado.execution.get("result_summary"),
+                "error": state_actualizado.execution.get("error")
+            }
         }
     }
+    
+    # Agregar resultados de la query si se ejecutó
+    if query_records is not None:
+        response["query_results"] = {
+            "summary": query_summary,
+            "count": len(query_records),
+            "records": query_records[:10]  # Limitar a 10 registros en la respuesta
+        }
+    
+    return response
 
 @app.post("/ask_legacy")
 async def consultar_agente_legacy(data: PreguntaData):
