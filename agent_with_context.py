@@ -4,7 +4,7 @@ import requests
 from typing import Optional, Tuple
 from openai import OpenAI
 
-from conversation_state import ConversationState
+from conversation_state import ConversationState, ConversationStatus
 
 
 def run_agent_with_context(
