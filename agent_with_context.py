@@ -230,13 +230,53 @@ El sistema se encargará automáticamente de actualizar el state_json.
         
         # TODO: Aquí debería parsearse STATE_JSON de la respuesta de OpenAI
         # para actualizar state.query dinámicamente.
-        # Por ahora, verificamos manualmente si la query parece estar lista
         
-        # Si la query tiene tabla y algún filtro o está explícitamente lista,
-        # marcarla como ready para que el endpoint la ejecute
-        if (state.query.get("table") and 
-            (state.query.get("filters") or state.query.get("validated"))):
-            # Marcar como lista para ejecutar
+        # WORKAROUND temporal: Intentar extraer información del mensaje
+        # para actualizar state.query basándose en palabras clave
+        msg_lower = mensaje_para_usuario.lower()
+        
+        # Detectar tabla mencionada
+        if not state.query.get("table"):
+            if "certificados" in msg_lower or "recolección" in msg_lower:
+                state.query["table"] = "Certificados"
+            elif "kardex" in msg_lower or "movimientos" in msg_lower:
+                state.query["table"] = "Kardex"
+        
+        # Detectar si el agente dice que va a ejecutar o que la consulta está lista
+        ready_keywords = [
+            "voy a armar la consulta",
+            "voy a ejecutar",
+            "procedo con la consulta",
+            "ejecuto la consulta",
+            "consulta lista",
+            "ya tengo todo",
+            "listo para",
+            "voy a buscar"
+        ]
+        
+        if any(keyword in msg_lower for keyword in ready_keywords):
+            # El agente indica que está listo para ejecutar
+            # Extraer filtros básicos de la conversación
+            
+            # Buscar coordinador en el historial
+            for msg in reversed(state.history):
+                if msg['role'] == 'user':
+                    user_msg_lower = msg['content'].lower()
+                    # Buscar nombres de coordinador mencionados
+                    if 'andrea' in user_msg_lower and not state.query["filters"].get("coordinador"):
+                        state.query["filters"]["coordinador"] = "Andrea Villarraga"
+                    elif 'andrés' in user_msg_lower or 'andres' in user_msg_lower:
+                        if not state.query["filters"].get("coordinador"):
+                            state.query["filters"]["coordinador"] = "Andrés Felipe Ramirez"
+            
+            # Si tenemos tabla, marcar como ready
+            if state.query.get("table"):
+                state.execution["ready"] = True
+                state.update_status(ConversationStatus.READY_TO_EXECUTE)
+        
+        # Alternativa: Si la query ya tiene tabla y filtros, marcar como ready
+        elif (state.query.get("table") and 
+              (state.query.get("filters") or state.query.get("validated"))):
             state.execution["ready"] = True
             state.update_status(ConversationStatus.READY_TO_EXECUTE)
         
