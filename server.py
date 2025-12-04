@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from jinja2 import Environment, FileSystemLoader
 from agent_core import run_agent
 from agent_with_context import run_agent_with_context
-from agent_with_function_calling import run_agent_with_function_calling
 from conversation_db import get_or_create_conversation, update_conversation
 from conversation_state import ConversationStatus
 from queries import execute_query_from_state
@@ -85,8 +84,8 @@ async def consultar_agente(data: PreguntaConContextoData):
     # 2. Actualizar el mensaje del usuario en el estado
     state.add_message("user", data.question)
     
-    # 3. Ejecutar el agente con Function Calling
-    mensaje_para_usuario, state_actualizado = run_agent_with_function_calling(
+    # 3. Ejecutar el agente con contexto
+    mensaje_para_usuario, state_actualizado = run_agent_with_context(
         data.question,
         state,
         data.extra
@@ -95,9 +94,29 @@ async def consultar_agente(data: PreguntaConContextoData):
     # 4. Guardar el estado actualizado en la BD (después de OpenAI)
     update_conversation(state_actualizado)
     
-    # NOTA: La ejecución automática ya NO es necesaria aquí
-    # porque el agente con Function Calling ejecuta directamente
-    # cuando llama a execute_airtable_query()
+    # 5. Decidir si ejecutar la consulta a Airtable automáticamente
+    # Condiciones: ready=True y last_run_at=None (no ejecutada aún)
+    if state_actualizado.execution["ready"] and state_actualizado.execution["last_run_at"] is None:
+        # Ejecutar la consulta a Airtable
+        query_summary, query_records, query_error = execute_query_from_state(state_actualizado)
+        
+        # Actualizar el estado con los resultados de la ejecución
+        state_actualizado.execution["last_run_at"] = datetime.utcnow().isoformat()
+        
+        if query_error:
+            # Hubo un error al ejecutar
+            state_actualizado.execution["error"] = query_error
+            state_actualizado.execution["result_summary"] = query_summary
+            # Mensaje al usuario informando del error
+            mensaje_para_usuario = query_summary
+        else:
+            # Ejecución exitosa
+            state_actualizado.execution["result_summary"] = query_summary
+            state_actualizado.execution["error"] = None
+            state_actualizado.update_status(ConversationStatus.EXECUTED)
+            
+            # Construir mensaje para el usuario con el resumen de resultados
+            mensaje_para_usuario = query_summary
             
             # Agregar sugerencia para ajustar filtros
             if query_records is not None and len(query_records) > 0:
