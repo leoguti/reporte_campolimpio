@@ -317,8 +317,11 @@ El sistema se encargará automáticamente de actualizar el state_json.
                         if not state.query["filters"].get("coordinador"):
                             state.query["filters"]["coordinador"] = "Andrés Felipe Ramirez"
             
-            # Extraer fechas del mensaje del agente usando regex
+            # Extraer fechas del mensaje del agente
             import re
+            from datetime import datetime, timedelta
+            
+            # Intentar encontrar fechas en formato YYYY-MM-DD
             date_pattern = r'(\d{4})-(\d{2})-(\d{2})'
             dates_found = re.findall(date_pattern, mensaje_para_usuario)
             
@@ -329,12 +332,35 @@ El sistema se encargará automáticamente de actualizar el state_json.
             elif len(dates_found) == 1:
                 # Una sola fecha, usar como fecha_desde
                 state.query["filters"]["fecha_desde"] = f"{dates_found[0][0]}-{dates_found[0][1]}-{dates_found[0][2]}"
+            elif "mes pasado" in msg_lower or "último mes" in msg_lower:
+                # Calcular mes pasado
+                today = datetime.now()
+                first_day_current = today.replace(day=1)
+                last_day_prev = first_day_current - timedelta(days=1)
+                first_day_prev = last_day_prev.replace(day=1)
+                
+                state.query["filters"]["fecha_desde"] = first_day_prev.strftime("%Y-%m-%d")
+                state.query["filters"]["fecha_hasta"] = last_day_prev.strftime("%Y-%m-%d")
+            elif "este mes" in msg_lower or "mes actual" in msg_lower:
+                # Calcular este mes
+                today = datetime.now()
+                first_day = today.replace(day=1)
+                state.query["filters"]["fecha_desde"] = first_day.strftime("%Y-%m-%d")
+                state.query["filters"]["fecha_hasta"] = today.strftime("%Y-%m-%d")
+            
+            # Detectar si es un consolidado/ranking (válido sin filtros específicos)
+            is_aggregate_query = any(phrase in msg_lower for phrase in [
+                "consolidado", "ranking", "resumen", "totales", 
+                "por coordinador", "agrupado", "todo colombia"
+            ])
             
             # NO marcar como ready si no hay filtros suficientes
+            # EXCEPTO si es un query agregado (consolidado/ranking)
             has_meaningful_filters = (
                 state.query["filters"].get("coordinador") or
                 state.query["filters"].get("fecha_desde") or
-                state.query["filters"].get("municipio")
+                state.query["filters"].get("municipio") or
+                is_aggregate_query
             )
             
             # Si tenemos tabla Y filtros significativos, marcar como ready
