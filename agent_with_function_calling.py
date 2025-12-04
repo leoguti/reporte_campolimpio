@@ -6,6 +6,10 @@ import json
 from typing import Optional, Tuple
 from datetime import datetime
 from openai import OpenAI
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
 
 from conversation_state import ConversationState, ConversationStatus
 from agent_tools import ALL_TOOLS
