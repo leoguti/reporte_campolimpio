@@ -268,16 +268,38 @@ El sistema se encargará automáticamente de actualizar el state_json.
             "elige", "quieres que"
         ])
         
+        # Detectar si el USUARIO está rechazando o diciendo NO
+        user_is_rejecting = False
+        if len(state.history) > 0:
+            last_user_msg = None
+            for msg in reversed(state.history):
+                if msg['role'] == 'user':
+                    last_user_msg = msg['content'].lower().strip()
+                    break
+            
+            if last_user_msg:
+                rejection_phrases = [
+                    last_user_msg == "no",
+                    last_user_msg.startswith("no "),
+                    "no quiero" in last_user_msg,
+                    "cancela" in last_user_msg,
+                    "no me" in last_user_msg
+                ]
+                user_is_rejecting = any(rejection_phrases)
+        
         # Detectar cuando muestra resumen de consulta SIN preguntar más
         shows_query_summary = (
             "- tabla:" in msg_lower and 
-            "- filtros:" in msg_lower
+            ("- filtros:" in msg_lower or "- período:" in msg_lower)
         )
         
         should_mark_ready = (
             (any(keyword in msg_lower for keyword in execution_keywords) 
-             and not is_asking_questions) or
-            (shows_query_summary and not is_asking_questions)
+             and not is_asking_questions
+             and not user_is_rejecting) or
+            (shows_query_summary 
+             and not is_asking_questions
+             and not user_is_rejecting)
         )
         
         if should_mark_ready:
@@ -295,8 +317,28 @@ El sistema se encargará automáticamente de actualizar el state_json.
                         if not state.query["filters"].get("coordinador"):
                             state.query["filters"]["coordinador"] = "Andrés Felipe Ramirez"
             
-            # Si tenemos tabla, marcar como ready
-            if state.query.get("table"):
+            # Extraer fechas del mensaje del agente usando regex
+            import re
+            date_pattern = r'(\d{4})-(\d{2})-(\d{2})'
+            dates_found = re.findall(date_pattern, mensaje_para_usuario)
+            
+            if len(dates_found) >= 2:
+                # Si encontramos 2 fechas, asumimos desde-hasta
+                state.query["filters"]["fecha_desde"] = f"{dates_found[0][0]}-{dates_found[0][1]}-{dates_found[0][2]}"
+                state.query["filters"]["fecha_hasta"] = f"{dates_found[1][0]}-{dates_found[1][1]}-{dates_found[1][2]}"
+            elif len(dates_found) == 1:
+                # Una sola fecha, usar como fecha_desde
+                state.query["filters"]["fecha_desde"] = f"{dates_found[0][0]}-{dates_found[0][1]}-{dates_found[0][2]}"
+            
+            # NO marcar como ready si no hay filtros suficientes
+            has_meaningful_filters = (
+                state.query["filters"].get("coordinador") or
+                state.query["filters"].get("fecha_desde") or
+                state.query["filters"].get("municipio")
+            )
+            
+            # Si tenemos tabla Y filtros significativos, marcar como ready
+            if state.query.get("table") and has_meaningful_filters:
                 state.execution["ready"] = True
                 state.update_status(ConversationStatus.READY_TO_EXECUTE)
         
